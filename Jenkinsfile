@@ -2,10 +2,10 @@ pipeline {
     agent any
 
     environment {
-        // Docker Hub credentials stored in Jenkins
-        DOCKERHUB_CREDENTIALS = credentials('dockerhub-credentials')
         IMAGE_NAME = 'sneha2311/my-java-app'
         IMAGE_TAG = 'latest'
+        DOCKERHUB_USERNAME = credentials('dockerhub-username') // Docker Hub username credential
+        DOCKERHUB_PASSWORD = credentials('dockerhub-password') // Docker Hub password/access token
     }
 
     stages {
@@ -21,36 +21,27 @@ pipeline {
         // Stage 2: Build the Docker image
         stage('Build Docker Image') {
             steps {
-                script {
-                    docker.build("${IMAGE_NAME}:${IMAGE_TAG}")
-                }
+                bat "docker build -t %IMAGE_NAME%:%IMAGE_TAG% ."
             }
         }
 
         // Stage 3: Login to Docker Hub
         stage('Login to Docker Hub') {
             steps {
-                script {
-                    docker.withRegistry('https://index.docker.io/v1/', 'dockerhub-credentials') {
-                        echo "Logged in to Docker Hub"
-                    }
-                }
+                bat """
+                docker login -u %DOCKERHUB_USERNAME% -p %DOCKERHUB_PASSWORD%
+                """
             }
         }
 
         // Stage 4: Push Docker Image to Docker Hub
         stage('Push Docker Image') {
             steps {
-                script {
-                    docker.withRegistry('https://index.docker.io/v1/', 'dockerhub-credentials') {
-                        docker.image("${IMAGE_NAME}:${IMAGE_TAG}").push()
-                    }
-                }
+                bat "docker push %IMAGE_NAME%:%IMAGE_TAG%"
             }
         }
     }
 
-    // Post actions
     post {
         success {
             echo "Docker image ${IMAGE_NAME}:${IMAGE_TAG} pushed successfully!"
