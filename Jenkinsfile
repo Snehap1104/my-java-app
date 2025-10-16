@@ -2,18 +2,23 @@ pipeline {
     agent any
 
     environment {
+        // Docker Hub credentials stored in Jenkins
         DOCKERHUB_CREDENTIALS = credentials('dockerhub-credentials')
         IMAGE_NAME = 'sneha2311/my-java-app'
         IMAGE_TAG = 'latest'
     }
 
     stages {
+        // Stage 1: Clone the repository from GitHub
         stage('Clone Repository') {
             steps {
-                git 'https://github.com/yourusername/my-java-app.git'
+                git branch: 'main',
+                    url: 'https://github.com/Snehap1104/my-java-app.git',
+                    credentialsId: 'github-credentials' // GitHub PAT credentials ID
             }
         }
 
+        // Stage 2: Build the Docker image
         stage('Build Docker Image') {
             steps {
                 script {
@@ -22,6 +27,7 @@ pipeline {
             }
         }
 
+        // Stage 3: Login to Docker Hub
         stage('Login to Docker Hub') {
             steps {
                 script {
@@ -32,6 +38,7 @@ pipeline {
             }
         }
 
+        // Stage 4: Push Docker Image to Docker Hub
         stage('Push Docker Image') {
             steps {
                 script {
@@ -43,6 +50,7 @@ pipeline {
         }
     }
 
+    // Post actions
     post {
         success {
             echo "Docker image ${IMAGE_NAME}:${IMAGE_TAG} pushed successfully!"
