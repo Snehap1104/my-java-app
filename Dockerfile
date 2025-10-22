@@ -1,28 +1,33 @@
-# Use official Maven image to build the app
+# Stage 1: Build the application
 FROM maven:3.9.6-eclipse-temurin-17 AS build
 
 # Set working directory
 WORKDIR /app
 
-# Copy the pom.xml and Java files
+# Copy pom.xml first (for better caching)
 COPY app/pom.xml .
-COPY app/src ./src
+
+# Download dependencies (cached if pom.xml doesn't change)
+RUN mvn dependency:go-offline
+
+# Copy source code
 COPY app/App.java ./src/main/java/
 
 # Package the application
 RUN mvn clean package -DskipTests
 
-# Use lightweight JDK image to run the app
+# Stage 2: Create the runtime image
 FROM openjdk:17-jdk-slim
 
 # Set working directory
 WORKDIR /app
 
-# Copy the JAR file from the build stage
-COPY --from=build /app/target/*.jar app.jar
+# Copy the JAR file from build stage
+COPY --from=build /app/target/hello-world-app.jar app.jar
 
-# Expose port (change if needed)
-EXPOSE 8080
+# Add metadata
+LABEL description="Java Hello World Application"
+LABEL version="1.0.0"
 
-# Run the Java application
+# Run the application
 ENTRYPOINT ["java", "-jar", "app.jar"]
