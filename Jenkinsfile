@@ -1,60 +1,96 @@
 pipeline {
     agent any
-
+    
     environment {
-        DOCKERHUB_CREDENTIALS = 'dockerhub-newcreds'
-        DOCKERHUB_USERNAME = 'sneha2311'
+        // Docker Hub credentials (configure in Jenkins)
+        DOCKER_HUB_CREDENTIALS = credentials('dockerhub-newcreds')
+        DOCKER_HUB_USERNAME = 'sneha2311'
         IMAGE_NAME = 'my-java-app'
-        IMAGE_TAG = 'latest'
+        IMAGE_TAG = "${BUILD_NUMBER}"
+        FULL_IMAGE_NAME = "${DOCKER_HUB_USERNAME}/${IMAGE_NAME}:${IMAGE_TAG}"
+        LATEST_IMAGE_NAME = "${DOCKER_HUB_USERNAME}/${IMAGE_NAME}:latest"
     }
-
+    
     stages {
         stage('Checkout') {
             steps {
-                git branch: 'main', url: 'https://github.com/Snehap1104/my-java-app.git'
+                echo 'Checking out code from GitHub...'
+                checkout scm
             }
         }
-
+        
         stage('Build Docker Image') {
             steps {
                 script {
-                    def fullImageName = "${DOCKERHUB_USERNAME}/${IMAGE_NAME}:${IMAGE_TAG}"
-                    echo "Building Docker image: ${fullImageName}"
-                    bat "docker build -t ${fullImageName} ."
+                    echo "Building Docker image: ${FULL_IMAGE_NAME}"
+                    sh """
+                        docker build -t ${FULL_IMAGE_NAME} .
+                        docker tag ${FULL_IMAGE_NAME} ${LATEST_IMAGE_NAME}
+                    """
                 }
             }
         }
-
+        
+        stage('Test Image') {
+            steps {
+                script {
+                    echo 'Testing Docker image...'
+                    sh """
+                        docker run --rm ${FULL_IMAGE_NAME} java -version
+                    """
+                }
+            }
+        }
+        
         stage('Login to Docker Hub') {
             steps {
                 script {
-                    withCredentials([usernamePassword(
-                        credentialsId: "${DOCKERHUB_CREDENTIALS}", 
-                        usernameVariable: 'DOCKER_USER', 
-                        passwordVariable: 'DOCKER_PASS')]) {
-                        bat 'echo %DOCKER_PASS% | docker login -u %DOCKER_USER% --password-stdin'
-                    }
+                    echo 'Logging into Docker Hub...'
+                    sh """
+                        echo \$DOCKER_HUB_CREDENTIALS_PSW | docker login -u \$DOCKER_HUB_CREDENTIALS_USR --password-stdin
+                    """
                 }
             }
         }
-
+        
         stage('Push to Docker Hub') {
             steps {
                 script {
-                    def fullImageName = "${DOCKERHUB_USERNAME}/${IMAGE_NAME}:${IMAGE_TAG}"
-                    echo "Pushing Docker image: ${fullImageName}"
-                    bat "docker push ${fullImageName}"
+                    echo "Pushing image to Docker Hub..."
+                    sh """
+                        docker push ${FULL_IMAGE_NAME}
+                        docker push ${LATEST_IMAGE_NAME}
+                    """
+                }
+            }
+        }
+        
+        stage('Cleanup') {
+            steps {
+                script {
+                    echo 'Cleaning up local images...'
+                    sh """
+                        docker rmi ${FULL_IMAGE_NAME} || true
+                        docker rmi ${LATEST_IMAGE_NAME} || true
+                    """
                 }
             }
         }
     }
-
+    
     post {
         success {
-            echo "Docker image pushed successfully: ${DOCKERHUB_USERNAME}/${IMAGE_NAME}:${IMAGE_TAG}"
+            echo "Pipeline completed successfully!"
+            echo "Image pushed: ${FULL_IMAGE_NAME}"
+            echo "Image pushed: ${LATEST_IMAGE_NAME}"
         }
         failure {
-            echo "Pipeline failed. Check logs for errors."
+            echo 'Pipeline failed!'
+        }
+        always {
+            script {
+                sh 'docker logout || true'
+            }
         }
     }
 }
